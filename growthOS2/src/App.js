@@ -685,10 +685,22 @@ CANADIAN BENCHMARKS 2024: avg household debt $85k, avg DTI 1.73x, avg savings ra
 Return ONLY valid JSON:
 { "score": 0-100, "scoreLabel": "Critical|Poor|Fair|Good|Excellent", "headline": "one punchy sentence", "benchmarks": [{ "metric": "string", "yours": "string", "canada": "string", "status": "better|worse|similar", "note": "string" }], "priorities": [{ "rank": 1, "title": "string", "detail": "2-3 sentences with numbers", "impact": "High|Medium|Low", "timeframe": "Immediate|30 days|3 months|6 months" }], "warnings": ["string"], "positives": ["string"], "monthlyPlan": { "debtPayment": "string", "savings": "string", "discretionary": "string", "note": "string" } }`;
     try {
-      const { callClaude } = await import('./upload');
-      const parsed = await callClaude(SYSTEM, [{ type: 'text', content: `Monthly income: $${inc.toLocaleString()}, expenses: $${exp.toLocaleString()}, surplus: $${(inc-exp).toLocaleString()}, total debt: $${debt.toLocaleString()}, annual income: $${ann.toLocaleString()}, DTI: ${dti.toFixed(2)}x, savings rate: ${(sr*100).toFixed(1)}%\n\nDebt breakdown:\n${breakdown}\n\nGoals: ${(financial.goals||[]).map(g=>`${g.label} (${g.status})`).join(', ')}` }]);
+      const res = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 2000,
+          system: SYSTEM,
+          messages: [{ role: 'user', content: `Monthly income: $${inc.toLocaleString()}, expenses: $${exp.toLocaleString()}, surplus: $${(inc-exp).toLocaleString()}, total debt: $${debt.toLocaleString()}, annual income: $${ann.toLocaleString()}, DTI: ${dti.toFixed(2)}x, savings rate: ${(sr*100).toFixed(1)}%\n\nDebt breakdown:\n${breakdown}\n\nGoals: ${(financial.goals||[]).map(g=>`${g.label} (${g.status})`).join(', ')}` }],
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      const text = data.content?.find(b => b.type === 'text')?.text || '';
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
       setAdvice(parsed); setStatus('success');
-    } catch { setStatus('error'); }
+    } catch (err) { console.error('Advisor error:', err); setStatus('error'); }
   };
 
   useState(() => { if (autoRun) runAnalysis(); }, [autoRun]); // eslint-disable-line

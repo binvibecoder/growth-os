@@ -39,9 +39,9 @@ export async function filesToContent(files) {
   return content;
 }
 
-// Call Claude API
+// Call Claude API — routed through /api/claude serverless function to avoid CORS
 export async function callClaude(system, userContent) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('/api/claude', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -52,7 +52,7 @@ export async function callClaude(system, userContent) {
     }),
   });
   const data = await res.json();
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
   const text = data.content?.find(b => b.type === 'text')?.text || '';
   return JSON.parse(text.replace(/```json|```/g, '').trim());
 }
