@@ -138,14 +138,30 @@ Limit newSessions to last 20 entries sorted by date descending.`;
 
 export async function parseHealthFile(file, onProgress) {
   onProgress('Reading health file...');
-  const text = await readAsText(file);
 
+  const name = file.name.toLowerCase();
+  const isImage = file.type.startsWith('image/') || /\.(png|jpg|jpeg|heic|gif|webp)$/.test(name);
+  const isPDF = file.type === 'application/pdf' || name.endsWith('.pdf');
+
+  // Images and PDFs — send directly to Claude for visual parsing
+  if (isImage || isPDF) {
+    onProgress('Sending screenshot to Claude...');
+    const b64 = await readAsBase64(file);
+    const mt = isImage ? (file.type.startsWith('image/') ? file.type : 'image/jpeg') : 'application/pdf';
+    const contentType = isImage ? 'image' : 'document';
+    return callClaude(HEALTH_SYSTEM, [
+      { type: contentType, source: { type: 'base64', media_type: mt, data: b64 } },
+      { type: 'text', text: 'Extract all health and fitness data from this screenshot/image and return the JSON.' }
+    ]);
+  }
+
+  // JSON file — try native parser first, fall back to Claude
   onProgress('Parsing JSON structure...');
+  const text = await readAsText(file);
   let raw;
   try { raw = JSON.parse(text); }
-  catch (e) { throw new Error('Not valid JSON. Export from Health Auto Export as Format: JSON.'); }
+  catch (e) { throw new Error('Not valid JSON. Export from Health Auto Export as Format: JSON, or upload a screenshot instead.'); }
 
-  // Try to parse natively first (faster, no API cost)
   const metrics = raw?.data?.metrics || raw?.metrics || [];
   const workouts = raw?.data?.workouts || raw?.workouts || [];
 
@@ -154,7 +170,7 @@ export async function parseHealthFile(file, onProgress) {
     return parseHealthNative(metrics, workouts);
   }
 
-  // Fallback: send to Claude
+  // Unknown JSON structure — send to Claude
   onProgress('Sending to Claude for parsing...');
   const sample = JSON.stringify(raw).slice(0, 15000);
   return callClaude(HEALTH_SYSTEM, [{ type: 'text', text: `Parse this health export:\n\n${sample}` }]);

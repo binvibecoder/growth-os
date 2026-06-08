@@ -412,9 +412,9 @@ function ExerciseSection({ data, save, replace }) {
       <Card style={{ border: '1px solid #38bdf833' }}>
         <CT>📱 Upload Health Data</CT>
         <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 1.6 }}>
-          Upload your Health Auto Export JSON. Imports weight, body fat, workouts, HR from Renpho + Apple Health.
+          Upload your Health Auto Export JSON, a screenshot from Renpho, or any health app screenshot. Claude reads any format.
         </div>
-        <UploadZone label="Tap to select Health Auto Export JSON" accept=".json,application/json" multiple={false} files={files} setFiles={setFiles} icon="🏃" />
+        <UploadZone label="Tap to select Health export, screenshot or photo" accept=".json,application/json,image/*,.png,.jpg,.jpeg,.heic,.pdf" multiple={false} files={files} setFiles={setFiles} icon="🏃" />
         <button onClick={processHealth} disabled={!files.length || status === 'loading'} style={{ background: files.length && status !== 'loading' ? '#38bdf8' : '#1e293b', border: 'none', borderRadius: 8, padding: 13, fontSize: 14, fontWeight: 700, cursor: files.length ? 'pointer' : 'default', color: files.length ? '#020817' : '#64748b', width: '100%', ...mono }}>
           {status === 'loading' ? msg || 'Importing...' : 'Import Health Data ✦'}
         </button>
