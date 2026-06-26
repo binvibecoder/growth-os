@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+const Anthropic = require('@anthropic-ai/sdk')
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -9,7 +9,7 @@ const CATEGORIES = [
   'fees', 'interest', 'payment', 'other'
 ]
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -51,8 +51,8 @@ Rules:
 - Extract every transaction line
 - DO NOT include card numbers, account numbers or personal info
 - Categorize each transaction using ONLY these categories: ${CATEGORIES.join(', ')}
-- Payments to the card are is_payment: true, amount should be negative
-- All other transactions are positive amounts
+- Payments to the card are is_payment: true with negative amount
+- All purchase transactions are positive amounts
 - Date format: YYYY-MM-DD
 - If date year is missing assume 2026
 
