@@ -30,29 +30,91 @@ function safeParseJSON(text) {
   }
 }
 
+function parseCSVLine(line) {
+  // Handle quoted fields with commas inside
+  const result = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuotes = !inQuotes; continue }
+    if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue }
+    current += line[i]
+  }
+  result.push(current.trim())
+  return result
+}
+
+function parseDate(dateStr) {
+  // Handle MM/DD/YYYY format
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/')
+    if (parts.length === 3) {
+      const [m, d, y] = parts
+      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
+    }
+  }
+  // Handle DD-Mon-YYYY or YYYY-MM-DD
+  return dateStr.substring(0, 10)
+}
+
+function detectFormat(lines) {
+  const first = parseCSVLine(lines[0])
+  const hasHeader = isNaN(parseFloat(first[0])) && !first[0].includes('/')
+  
+  if (hasHeader) {
+    const headers = first.map(h => h.toLowerCase())
+    return {
+      hasHeader: true,
+      dateIdx: headers.findIndex(h => h.includes('date')),
+      descIdx: headers.findIndex(h => h.includes('desc') || h.includes('merchant') || h.includes('name') || h.includes('payee') || h.includes('narr')),
+      amtIdx: headers.findIndex(h => h.includes('amount') || h.includes('debit') || h.includes('withdrawal')),
+      creditIdx: headers.findIndex(h => h.includes('credit') || h.includes('deposit')),
+    }
+  }
+  
+  // No header - detect by content of first data row
+  // Format: Date, Description, Amount, Credit, Balance  (your format)
+  const sample = parseCSVLine(lines[0])
+  const isDateFirst = sample[0].includes('/') || sample[0].match(/\d{4}-\d{2}-\d{2}/)
+  
+  if (isDateFirst) {
+    return { hasHeader: false, dateIdx: 0, descIdx: 1, amtIdx: 2, creditIdx: 3 }
+  }
+  
+  // Amount first format (some banks)
+  return { hasHeader: false, dateIdx: 2, descIdx: 3, amtIdx: 0, creditIdx: 1 }
+}
+
 function parseCSVLocally(text) {
   const lines = text.trim().split('\n').filter(l => l.trim())
-  if (lines.length < 2) return []
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''))
-  const dateIdx = headers.findIndex(h => h.includes('date'))
-  const amtIdx = headers.findIndex(h => h.includes('amount') || h.includes('debit') || h.includes('credit'))
-  const descIdx = headers.findIndex(h => h.includes('desc') || h.includes('merchant') || h.includes('name') || h.includes('payee') || h.includes('narr'))
-  if (dateIdx < 0 || amtIdx < 0) return []
+  if (lines.length < 1) return []
 
-  return lines.slice(1).map(line => {
-    const cols = line.split(',').map(c => c.trim().replace(/"/g, ''))
-    const amount = parseFloat(cols[amtIdx] || '0') || 0
-    const merchant = descIdx >= 0 ? cols[descIdx] : 'Unknown'
-    const date = cols[dateIdx] || ''
-    const absAmount = Math.abs(amount)
-    if (absAmount === 0) return null
+  const fmt = detectFormat(lines)
+  const dataLines = fmt.hasHeader ? lines.slice(1) : lines
+
+  return dataLines.map(line => {
+    const cols = parseCSVLine(line)
+    if (cols.length < 3) return null
+    
+    const dateRaw = cols[fmt.dateIdx] || ''
+    const merchant = (cols[fmt.descIdx] || 'Unknown').substring(0, 60)
+    const amtRaw = parseFloat((cols[fmt.amtIdx] || '0').replace(/[$,]/g, '')) || 0
+    const creditRaw = fmt.creditIdx >= 0 ? parseFloat((cols[fmt.creditIdx] || '0').replace(/[$,]/g, '')) || 0 : 0
+
+    const amount = Math.abs(amtRaw) || creditRaw
+    if (amount === 0) return null
+
+    const date = parseDate(dateRaw)
+    const isPayment = creditRaw > 0 || merchant.toLowerCase().includes('payment') || merchant.toLowerCase().includes('thank you') || merchant.toLowerCase().includes('credit')
+    const isIncome = merchant.toLowerCase().includes('salary') || merchant.toLowerCase().includes('payroll') || merchant.toLowerCase().includes('direct dep')
+
     return {
-      date: date.substring(0, 10),
-      merchant: merchant.substring(0, 60),
-      amount: absAmount,
+      date,
+      merchant,
+      amount,
       category: guessCategory(merchant),
-      is_payment: amount < 0 || merchant.toLowerCase().includes('payment') || merchant.toLowerCase().includes('thank you'),
-      is_income: merchant.toLowerCase().includes('salary') || merchant.toLowerCase().includes('payroll') || merchant.toLowerCase().includes('direct dep'),
+      is_payment: isPayment,
+      is_income: isIncome,
     }
   }).filter(Boolean)
 }
