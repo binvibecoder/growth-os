@@ -218,23 +218,26 @@ Important: Keep merchant names short (max 50 chars). If there are many transacti
         topMerchants[t.category][t.merchant] = (topMerchants[t.category][t.merchant] || 0) + t.amount
       })
 
+      // Top 5 merchants per category
+      const topMerchantsList = Object.entries(topMerchants).map(([cat, merchants]) => {
+        const top = Object.entries(merchants).sort((a,b) => b[1]-a[1]).slice(0,3).map(([m,v]) => `${m}($${v.toFixed(0)})`).join(', ')
+        return `${cat}: ${top}`
+      }).join(' | ')
+
+      const prompt = `Financial advisor for Canadian household. Return ONLY JSON no markdown.
+Income: $${monthly_income || totalIncome.toFixed(0)}/mo CAD
+Spend: $${totalSpend.toFixed(2)} total, ${(transactions||[]).length} transactions
+Categories: ${JSON.stringify(byCategory)}
+Top merchants: ${topMerchantsList.substring(0, 500)}
+Debts: CT Card $2000 0% APR, Scotia LoC1 $13920 12.95% APR, Scotia LoC2 $8582 13.1% APR
+Context: Toronto Canada, cleared all CCs, mortgage renewal Aug 2026
+
+{"summary":{"total_spend":0,"total_income":0,"net":0,"top_category":"","biggest_win":"","biggest_concern":""},"by_category":[{"category":"","amount":0,"pct":0,"verdict":"ok","tip":""}],"anomalies":[{"type":"","description":"","amount":0}],"debt_strategy":{"method":"avalanche","monthly_interest_cost":0,"recommendation":"","priority_actions":[""]},"action_plan":[{"priority":1,"action":"","impact":"","difficulty":"easy"}],"monthly_budget_suggestion":[{"category":"","current":0,"suggested":0,"reason":""}],"overall_health_score":0,"health_verdict":""}`
+
       const response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: `You are a personal financial advisor for a Canadian household. Return ONLY JSON, no markdown.
-
-Total transactions: ${(transactions || []).length}
-Total spend: $${totalSpend.toFixed(2)}
-Total income detected: $${totalIncome.toFixed(2)}
-${monthly_income ? `Stated monthly income: $${monthly_income} CAD` : ''}
-Spend by category: ${JSON.stringify(byCategory)}
-${debts ? `Current debts: ${JSON.stringify(debts)}` : ''}
-${context || ''}
-
-{"summary":{"total_spend":number,"total_income":number,"net":number,"top_category":"string","biggest_win":"string","biggest_concern":"string"},"by_category":[{"category":"string","amount":number,"pct":number,"verdict":"good|ok|high","tip":"string"}],"anomalies":[{"type":"string","description":"string","amount":number}],"debt_strategy":{"method":"avalanche","monthly_interest_cost":number,"recommendation":"string","priority_actions":["string"]},"action_plan":[{"priority":1,"action":"string","impact":"string","difficulty":"easy|medium|hard"}],"monthly_budget_suggestion":[{"category":"string","current":number,"suggested":number,"reason":"string"}],"overall_health_score":number,"health_verdict":"string"}`
-        }]
+        max_tokens: 3000,
+        messages: [{ role: 'user', content: prompt }]
       })
 
       const text = response.content[0].text
